@@ -21,7 +21,21 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"organizer" | "guest">("guest");
   const [organizerTab, setOrganizerTab] = useState<"pagos" | "pendentes">("pagos");
+  const [organizerMainTab, setOrganizerMainTab] = useState<"finance" | "reception" | "broadcast" | "retro">("finance");
   
+  // Pro check-in scanner states
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scanStatus, setScanStatus] = useState<"idle" | "scanning" | "success" | "fail">("idle");
+  const [scannedGuest, setScannedGuest] = useState<Guest | null>(null);
+  const [checkedInIds, setCheckedInIds] = useState<string[]>([]);
+  const [searchCheckIn, setSearchCheckIn] = useState("");
+
+  // Communication & History states
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [showTxHistory, setShowTxHistory] = useState(false);
+  const [retroSlideIdx, setRetroSlideIdx] = useState(0);
+  const [retroMusic, setRetroMusic] = useState(false);
+
   // RSVP Form state details
   const [rsvpName, setRsvpName] = useState(currentUser.name);
   const [rsvpPhone, setRsvpPhone] = useState(currentUser.phone || "");
@@ -1110,19 +1124,45 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
         /* ==================== MODO ORGANIZADOR (DETALHAMENTO DA VAQUINHA) ==================== */
         <div id="organizer-dashboard" className="p-4 sm:p-8 max-w-2xl mx-auto space-y-6 animate-fadeIn">
           
-          {/* Quick Header Panel with Edit Toggle */}
-          <div className="flex justify-between items-center bg-[#141b2f]/40 backdrop-blur-md border border-indigo-500/10 p-4 rounded-3xl">
-            <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#a5b4fc]">ORGANIZADOR</span>
-              <h2 className="text-sm font-semibold text-white">Controles da Vaquinha</h2>
-            </div>
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="bg-indigo-500/15 text-indigo-400 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition hover:bg-indigo-500/30"
-            >
-              <Edit3 className="w-4 h-4" /> {isEditing ? "Fechar Editor" : "Editar Dados"}
-            </button>
+          {/* Main Organizer Tabs */}
+          <div className="flex bg-[#141b2f]/80 border border-indigo-500/15 p-1 rounded-2xl overflow-x-auto gap-1">
+            {[
+              { id: "finance" as const, label: "Financeiro 💸" },
+              { id: "reception" as const, label: "Check-in / Portaria 🔑" },
+              { id: "broadcast" as const, label: "Comunicar 📣" },
+              { id: "retro" as const, label: "Retrospectiva 📸" }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setOrganizerMainTab(tab.id)}
+                className={`flex-1 px-3 py-2 text-[11px] font-bold rounded-xl whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                  organizerMainTab === tab.id 
+                    ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" 
+                    : "text-indigo-200/50 hover:text-indigo-200/80 hover:bg-white/5"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
+
+          {organizerMainTab === "finance" && (
+            <>
+              {/* Quick Header Panel with Edit Toggle */}
+              <div className="flex justify-between items-center bg-[#141b2f]/40 backdrop-blur-md border border-indigo-500/10 p-4 rounded-3xl">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#a5b4fc]">ORGANIZADOR</span>
+                  <h2 className="text-sm font-semibold text-white">Controles da Vaquinha</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="bg-indigo-500/15 text-indigo-400 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition hover:bg-indigo-500/30 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" /> {isEditing ? "Fechar Editor" : "Editar Dados"}
+                </button>
+              </div>
 
             {/* Editing Segment if toggled */}
             {isEditing && (
@@ -1294,6 +1334,16 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                 </span>
               </div>
             </div>
+
+            <div className="pt-4 border-t border-indigo-500/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowTxHistory(true)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+              >
+                Ver Histórico Financeiro Completo ➔
+              </button>
+            </div>
           </div>
 
           {/* CARD 2: CONFIRMED PAYMENTS SUMMARY */}
@@ -1439,6 +1489,400 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
               })()}
             </div>
           </div>
+          </>
+          )}
+
+          {/* TRANSACTION HISTORY MODAL (17) */}
+          {showTxHistory && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+              <div className="bg-[#141b31] border border-indigo-500/20 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative space-y-4">
+                <div className="flex justify-between items-center border-b border-indigo-500/10 pb-3">
+                  <h3 className="text-md font-bold flex items-center gap-1.5 text-white">
+                    <DollarSign className="w-5 h-5 text-emerald-400" />
+                    Histórico Financeiro do Evento
+                  </h3>
+                  <button onClick={() => setShowTxHistory(false)} className="text-slate-400 hover:text-white text-xs font-mono border border-slate-800 rounded-lg px-2.5 py-1 cursor-pointer">Fechar</button>
+                </div>
+
+                <div className="overflow-x-auto max-h-80 pr-1">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-indigo-500/10 text-indigo-200/40 font-mono">
+                        <th className="py-2">Data/Hora</th>
+                        <th className="py-2">Doador(a)</th>
+                        <th className="py-2">Mensagem</th>
+                        <th className="py-2 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-indigo-500/5">
+                      {(event.contributions || []).map((ct) => (
+                        <tr key={ct.id}>
+                          <td className="py-2.5 font-mono text-slate-500">{new Date(ct.createdAt).toLocaleString("pt-BR")}</td>
+                          <td className="py-2.5 font-semibold text-white flex items-center gap-1.5">
+                            <img src={ct.contributorAvatar} className="w-5 h-5 rounded-full object-cover" />
+                            {ct.contributorName}
+                          </td>
+                          <td className="py-2.5 text-slate-400 italic">"{ct.message || "Sem recado"}"</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-emerald-400">R$ {ct.amount.toLocaleString("pt-BR")}</td>
+                        </tr>
+                      ))}
+                      {(event.contributions || []).length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-500">Nenhuma transação registrada ainda.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button 
+                    onClick={() => alert("Relatório PDF gerado e pronto para download (Simulado).")} 
+                    className="bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl px-4 py-2 text-xs font-semibold cursor-pointer"
+                  >
+                    Exportar Comprovante PDF
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RECEPTION & PORTARIA CHECK-IN VIEW (27, 28, 29) */}
+          {organizerMainTab === "reception" && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Stats card */}
+              <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-4 shadow-2xl">
+                <span className="inline-flex items-center px-4 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold font-mono tracking-widest text-indigo-400 uppercase">
+                  Controle de Portaria & Check-in (Pro)
+                </span>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-950/40 p-4 rounded-2xl text-center space-y-1">
+                    <span className="text-[10px] font-mono text-slate-500 block uppercase">PRESENTES REAIS</span>
+                    <span className="text-2xl font-black text-white font-mono">
+                      {checkedInIds.length} / {confirmedGuests.length}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-4 rounded-2xl text-center space-y-1">
+                    <span className="text-[10px] font-mono text-slate-500 block uppercase">PICO DE CHEGADA</span>
+                    <span className="text-2xl font-black text-pink-400 font-mono">23:45</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQRScanner(true);
+                    setScanStatus("scanning");
+                    setScannedGuest(null);
+                  }}
+                  className="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-2xl text-xs font-bold uppercase tracking-wider text-white hover:opacity-95 shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M7 7h3v3H7z"></path><path d="M14 7h3v3h-3z"></path><path d="M7 14h3v3H7z"></path><path d="M14 14h3v3h-3z"></path></svg>
+                  Escanear QR Code de Entrada
+                </button>
+              </div>
+
+              {/* QR scanner simulated viewport (28) */}
+              {showQRScanner && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+                  <div className="bg-[#141b31] border border-indigo-500/20 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative space-y-6 text-center">
+                    <div className="flex justify-between items-center border-b border-indigo-500/10 pb-3">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Leitor QR Code Simulado</span>
+                      <button onClick={() => setShowQRScanner(false)} className="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Fechar</button>
+                    </div>
+
+                    {scanStatus === "scanning" && (
+                      <div className="space-y-4">
+                        {/* Simulated camera screen */}
+                        <div className="w-56 h-56 mx-auto bg-slate-950 rounded-2xl border-2 border-indigo-500/30 relative overflow-hidden flex items-center justify-center">
+                          {/* Laser scanning line */}
+                          <div className="absolute left-0 right-0 h-0.5 bg-pink-500 top-1/2 shadow-[0_0_8px_rgba(236,72,153,1)] animate-[bounce_2s_infinite]" />
+                          <svg className="w-16 h-16 text-indigo-500/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M7 7h3v3H7z"></path><path d="M14 7h3v3h-3z"></path><path d="M7 14h3v3H7z"></path><path d="M14 14h3v3h-3z"></path></svg>
+                        </div>
+                        
+                        <p className="text-xs text-indigo-200/40">Selecione um convidado para simular o escaneamento de seu ingresso QR Code:</p>
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-left">
+                          {confirmedGuests.map(g => (
+                            <button
+                              key={g.id}
+                              onClick={() => {
+                                setScannedGuest(g);
+                                setScanStatus("success");
+                                setCheckedInIds(prev => Array.from(new Set([...prev, g.id])));
+                              }}
+                              className="w-full p-2 bg-slate-950/40 hover:bg-indigo-500/10 border border-indigo-500/10 rounded-xl text-xs flex items-center gap-2 text-white cursor-pointer"
+                            >
+                              <img src={g.avatar} className="w-5 h-5 rounded-full object-cover" />
+                              <span className="truncate">{g.name}</span>
+                            </button>
+                          ))}
+                          {confirmedGuests.length === 0 && (
+                            <p className="text-xs text-slate-500 text-center py-2">Sem convidados confirmados para testar.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {scanStatus === "success" && scannedGuest && (
+                      <div className="space-y-4 py-4 animate-fadeIn">
+                        <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center mx-auto text-emerald-400">
+                          <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-bold text-white">Check-in Realizado!</h4>
+                          <p className="text-xs text-emerald-400 font-mono mt-1 uppercase tracking-widest">INGRESSO VÁLIDO & VERIFICADO</p>
+                        </div>
+                        <div className="bg-slate-950/40 p-3 rounded-xl border border-indigo-500/10 flex items-center gap-3 text-left">
+                          <img src={scannedGuest.avatar} className="w-9 h-9 rounded-full object-cover" />
+                          <div>
+                            <span className="text-xs font-bold block text-white">{scannedGuest.name}</span>
+                            <span className="text-[10px] text-indigo-200/40 block">Ticket #{scannedGuest.id}</span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setScanStatus("scanning")} 
+                          className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          Escanear Próximo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Relatório pós-evento metrics (29) */}
+              <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-4 shadow-2xl text-left">
+                <h3 className="text-xs font-mono font-bold tracking-widest text-[#a5b4fc] uppercase">Relatório Final Executivo</h3>
+                
+                {/* Horizontal custom bar charts */}
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-slate-300">
+                      <span>Presença Real vs Confirmada</span>
+                      <span className="font-bold">{checkedInIds.length} / {confirmedGuests.length}</span>
+                    </div>
+                    <div className="w-full bg-slate-950/40 h-2.5 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="bg-indigo-500 h-full rounded-full" 
+                        style={{ width: `${confirmedGuests.length ? (checkedInIds.length / confirmedGuests.length) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-slate-300">
+                      <span>Cotas de Vaquinha Pagas</span>
+                      <span className="font-bold">{(event.guests || []).filter(g=>g.paid).length} / {(event.guests || []).length}</span>
+                    </div>
+                    <div className="w-full bg-slate-950/40 h-2.5 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="bg-pink-500 h-full rounded-full" 
+                        style={{ width: `${(event.guests || []).length ? ((event.guests || []).filter(g=>g.paid).length / (event.guests || []).length) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button 
+                    onClick={() => alert("Relatório Executivo exportado em formato PDF (Simulado).")} 
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 px-4 py-2 rounded-xl font-bold cursor-pointer"
+                  >
+                    Exportar Relatório Pro
+                  </button>
+                </div>
+              </div>
+
+              {/* Guest check-in list search & toggle */}
+              <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-4 shadow-2xl text-left">
+                <h3 className="text-xs font-mono font-bold tracking-widest text-[#a5b4fc] uppercase">Check-in Manual</h3>
+                <input
+                  type="text"
+                  placeholder="Pesquisar convidado por nome..."
+                  value={searchCheckIn}
+                  onChange={(e) => setSearchCheckIn(e.target.value)}
+                  className="w-full bg-slate-950/40 border border-indigo-500/15 p-3.5 rounded-2xl outline-none text-xs text-white"
+                />
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {confirmedGuests.filter(g => g.name.toLowerCase().includes(searchCheckIn.toLowerCase())).map(g => {
+                    const isCheckedIn = checkedInIds.includes(g.id);
+                    return (
+                      <div key={g.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/20 border border-white/5">
+                        <div className="flex items-center gap-2">
+                          <img src={g.avatar} className="w-7 h-7 rounded-full object-cover" />
+                          <span className="text-xs font-semibold text-white">{g.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isCheckedIn) {
+                              setCheckedInIds(prev => prev.filter(id => id !== g.id));
+                            } else {
+                              setCheckedInIds(prev => [...prev, g.id]);
+                            }
+                          }}
+                          className={`text-[9px] font-mono font-bold px-3 py-1.5 rounded-full border transition cursor-pointer ${
+                            isCheckedIn
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                              : "bg-slate-850 border-slate-700 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          {isCheckedIn ? "PRESENTE" : "PENDENTE"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BROADCAST VIEW (23) */}
+          {organizerMainTab === "broadcast" && (
+            <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-5 shadow-2xl text-left animate-fadeIn">
+              <span className="inline-flex items-center px-4 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-[10px] font-bold font-mono tracking-widest text-pink-400 uppercase">
+                Mensagem Geral para Convidados (Pro)
+              </span>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Dispare atualizações sobre o local, lembretes de última hora ou atualizações de vaquinha para todos os convidados confirmados por WhatsApp de uma vez.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-mono text-indigo-300 uppercase mb-2">Mensagem do Comunicado</label>
+                  <textarea
+                    rows={4}
+                    value={broadcastMessage}
+                    onChange={(e) => setBroadcastMessage(e.target.value)}
+                    placeholder="Ex: Pessoal, o local do evento foi atualizado! Venham no endereço indicado no portal..."
+                    className="w-full bg-slate-950/40 border border-indigo-500/15 focus:border-indigo-400 p-4 rounded-2xl outline-none text-xs text-white resize-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!broadcastMessage.trim()) {
+                      alert("Digite um recado para enviar!");
+                      return;
+                    }
+                    const messageText = `Comunicado Solstice: *${event.name}*\n\n${broadcastMessage}`;
+                    const shareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
+                    window.open(shareUrl, "_blank");
+                    alert("Redirecionando para o envio em massa via WhatsApp.");
+                  }}
+                  className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.1 1.448 4.7 1.449 5.4 0 9.8-4.399 9.8-9.799-.002-2.615-1.012-5.074-2.86-6.924C16.435 1.93 13.982.93 11.998.93c-5.4 0-9.8 4.4-9.8 9.8 0 1.8.5 3.5 1.4 5.1l-.8 3.3 3.3-.8zM17.487 14.39c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.28-.47-2.45-1.51-.9-.8-1.53-1.8-1.7-2.1-.18-.3-.02-.47.13-.62.14-.13.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.07-.15-.68-1.62-.93-2.22-.24-.59-.49-.51-.68-.52-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.28.3-1.07 1.05-1.07 2.56s1.1 2.97 1.25 3.17c.15.2 2.16 3.29 5.23 4.61.73.31 1.3.5 1.74.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.29.18-1.42-.07-.13-.27-.2-.57-.35z"/></svg>
+                  Disparar Mensagem pelo WhatsApp
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* RETROSPECTIVE VIEW (21) */}
+          {organizerMainTab === "retro" && (
+            <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-5 shadow-2xl text-left animate-fadeIn">
+              <span className="inline-flex items-center px-4 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold font-mono tracking-widest text-indigo-400 uppercase">
+                Retrospectiva Automática de Inteligência Artificial
+              </span>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Nossa IA reuniu os melhores momentos, presença e marcos financeiros do evento para criar esta retrospectiva inesquecível.
+              </p>
+
+              {/* Simulated Slideshow Viewport */}
+              <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 relative overflow-hidden h-72 flex flex-col justify-between">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-2xl pointer-events-none" />
+                
+                {/* Header of slide */}
+                <div className="flex justify-between items-center text-[10px] font-mono text-indigo-300">
+                  <span>SLIDE {retroSlideIdx + 1} DE 4</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setRetroMusic(!retroMusic)}
+                    className={`px-2 py-0.5 rounded border text-[9px] cursor-pointer ${retroMusic ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "border-slate-800 text-slate-400"}`}
+                  >
+                    {retroMusic ? "♫ Música On" : "🔇 Música Off"}
+                  </button>
+                </div>
+
+                {/* Body of slide */}
+                <div className="flex-1 flex items-center justify-center p-4">
+                  {retroSlideIdx === 0 && (
+                    <div className="text-center space-y-1.5 animate-fadeIn">
+                      <h4 className="text-sm font-bold font-mono text-indigo-200">RITMO & PRESENÇA</h4>
+                      <p className="text-2xl font-black text-white">{confirmedGuests.length} Presenças Ativas</p>
+                      <p className="text-[10px] text-slate-500">Membros participando do rolê.</p>
+                    </div>
+                  )}
+
+                  {retroSlideIdx === 1 && (
+                    <div className="text-center space-y-2 animate-fadeIn w-full">
+                      <h4 className="text-sm font-bold font-mono text-[#a5b4fc]">MURAL DE VIBES</h4>
+                      <div className="flex justify-center gap-2">
+                        {event.vibeWall?.slice(0, 3).map((v, vi) => (
+                          <img key={v.id || vi} src={v.url} className="w-16 h-16 rounded-xl object-cover border border-white/10" />
+                        ))}
+                        {(event.vibeWall || []).length === 0 && (
+                          <p className="text-xs text-slate-500">Sem fotos no Mural ainda para mostrar.</p>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500">{(event.vibeWall || []).length} fotos compartilhadas pelo coletivo.</p>
+                    </div>
+                  )}
+
+                  {retroSlideIdx === 2 && (
+                    <div className="text-center space-y-1.5 animate-fadeIn">
+                      <h4 className="text-sm font-bold font-mono text-emerald-400">FINANCEIRO INTEGRADO</h4>
+                      <p className="text-2xl font-black text-white">R$ {event.vaquinhaCollected || 0} Acumulado</p>
+                      <p className="text-[10px] text-slate-500">Saldo gerado para vaquinha no Pix.</p>
+                    </div>
+                  )}
+
+                  {retroSlideIdx === 3 && (
+                    <div className="text-center space-y-1.5 animate-fadeIn">
+                      <h4 className="text-sm font-bold font-mono text-pink-400">STATUS DE VIBE CHECK</h4>
+                      <p className="text-3xl font-black bg-gradient-to-r from-pink-500 to-indigo-500 bg-clip-text text-transparent">Vibe {event.vibeScore || "9.8"} ⚡</p>
+                      <p className="text-[10px] text-slate-500">Parabéns! A meta da comemoração foi concluída!</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Controls */}
+                <div className="flex justify-between items-center">
+                  <button 
+                    onClick={() => setRetroSlideIdx(prev => Math.max(0, prev - 1))}
+                    disabled={retroSlideIdx === 0}
+                    className="text-xs text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+                  <button 
+                    onClick={() => setRetroSlideIdx(prev => Math.min(3, prev + 1))}
+                    disabled={retroSlideIdx === 3}
+                    className="text-xs text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                  >
+                    Próximo
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => alert("Retrospectiva compartilhada nos Stories (Simulado).")}
+                  className="flex-1 py-3 bg-pink-500 hover:bg-pink-400 text-white rounded-xl text-xs font-bold text-center cursor-pointer"
+                >
+                  Compartilhar como Story 📱
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

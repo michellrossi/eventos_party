@@ -33,6 +33,24 @@ export default function App() {
     new Date().toISOString().split("T")[0]
   );
 
+  // Central de Notificações states
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: 1, text: "Marcus P. confirmou presença no seu evento 'Neon Genesis'", type: "rsvp", time: "Há 10 min", eventId: "neon-genesis" },
+    { id: 2, text: "Julia Mendes enviou uma cota de R$ 100 para a vaquinha", type: "payment", time: "Há 30 min", eventId: "neon-genesis" },
+    { id: 3, text: "Ana Flávia adicionou uma nova foto ao Mural de Vibes", type: "photo", time: "Há 2 horas", eventId: "neon-genesis" },
+    { id: 4, text: "Sua meta de arrecadação atingiu 83% do objetivo final!", type: "alert", time: "Há 4 horas", eventId: "neon-genesis" }
+  ]);
+
+  // Configurações & Assinaturas states
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [prefNotifications, setPrefNotifications] = useState(true);
+  const [prefPrivacy, setPrefPrivacy] = useState(true);
+  const [prefTheme, setPrefTheme] = useState("dark");
+  const [prefLanguage, setPrefLanguage] = useState("pt-BR");
+
   // Load user profile and initial events
   useEffect(() => {
     const rawUser = localStorage.getItem("solstice_user");
@@ -173,18 +191,31 @@ export default function App() {
           </h2>
         </div>
 
-        {/* Mini user profile badge */}
-        <div className="flex items-center gap-2 bg-[#141b2f] p-1.5 pr-3.5 rounded-full border border-indigo-500/10">
-          <img 
-            src={currentUser.avatar} 
-            alt="My profile" 
-            className="w-6 h-6 rounded-full object-cover border border-white/20"
-            referrerPolicy="no-referrer"
-          />
-          <div className="text-left hidden sm:block">
-            <span className="text-[9px] font-mono lowercase text-indigo-400 block tracking-tight leading-none">
-              {currentUser.nickname}
-            </span>
+        {/* Header Actions */}
+        <div className="flex items-center gap-3">
+          {/* Notification bell button */}
+          <button
+            onClick={() => setShowNotifications(true)}
+            className="p-2 bg-[#141b2f] border border-indigo-500/10 hover:border-indigo-500/30 rounded-full text-indigo-300 hover:text-white transition relative cursor-pointer"
+            title="Notificações"
+          >
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.8)] animate-pulse" />
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </button>
+
+          {/* Mini user profile badge */}
+          <div className="flex items-center gap-2 bg-[#141b2f] p-1.5 pr-3.5 rounded-full border border-indigo-500/10">
+            <img 
+              src={currentUser.avatar} 
+              alt="My profile" 
+              className="w-6 h-6 rounded-full object-cover border border-white/20"
+              referrerPolicy="no-referrer"
+            />
+            <div className="text-left hidden sm:block">
+              <span className="text-[9px] font-mono lowercase text-indigo-400 block tracking-tight leading-none">
+                {currentUser.nickname}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -520,15 +551,259 @@ export default function App() {
               </div>
               <button 
                 onClick={() => alert("Sua carteira digital Solstice está sincronizada e ativa.")}
-                className="bg-teal-400 text-slate-950 font-bold px-5 py-3 rounded-2xl text-xs transition hover:bg-teal-300 transform active:scale-95"
+                className="bg-teal-400 text-slate-950 font-bold px-5 py-3 rounded-2xl text-xs transition hover:bg-teal-300 transform active:scale-95 cursor-pointer"
               >
                 Gerenciar Pix
+              </button>
+            </div>
+
+            {/* Configurações & Planos PRO */}
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => setShowSettingsModal(true)}
+                className="bg-[#141b31]/60 border border-indigo-500/15 p-5 rounded-3xl hover:border-indigo-500/40 hover:bg-[#141b31]/90 transition text-left cursor-pointer flex flex-col gap-3 justify-between"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Configurações</h4>
+                  <p className="text-[10px] text-indigo-200/40 mt-0.5">Notificações, Privacidade e Idioma.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => setShowPlanModal(true)}
+                className="bg-gradient-to-tr from-[#1f0d2c] to-[#141b31]/50 border border-pink-500/25 p-5 rounded-3xl hover:border-pink-500/50 hover:from-[#2a123b] transition text-left cursor-pointer flex flex-col gap-3 justify-between"
+              >
+                <div className="w-9 h-9 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"></polygon><line x1="12" y1="22" x2="12" y2="15.5"></line><polyline points="22 8.5 12 15.5 2 8.5"></polyline><polyline points="2 15.5 12 8.5 22 15.5"></polyline><line x1="12" y1="2" x2="12" y2="8.5"></line></svg>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-pink-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    Assinatura 
+                    {isPro && <span className="text-[8px] bg-pink-500 text-white px-1.5 py-0.5 rounded font-mono font-black">PRO</span>}
+                  </h4>
+                  <p className="text-[10px] text-indigo-200/40 mt-0.5">{isPro ? "Gerenciar benefícios PRO ativos." : "Conhecer planos Solstice PRO."}</p>
+                </div>
               </button>
             </div>
           </div>
         )}
 
       </main>
+
+      {/* CENTRAL DE NOTIFICAÇÕES (SLIDE-OVER PANEL) */}
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity" onClick={() => setShowNotifications(false)} />
+          
+          <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-[#0c1228] border-l border-indigo-500/20 shadow-2xl flex flex-col">
+              <div className="p-6 border-b border-indigo-500/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-pink-500 animate-ping" />
+                  <h3 className="text-lg font-bold">Central de Notificações</h3>
+                </div>
+                <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-xs font-mono border border-slate-800 rounded-lg px-2.5 py-1 cursor-pointer">Fechar</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {notifications.map((notif) => (
+                  <div 
+                    key={notif.id} 
+                    onClick={() => {
+                      setSelectedEventId(notif.eventId);
+                      setShowNotifications(false);
+                    }}
+                    className="p-4 bg-[#141b31]/60 border border-indigo-500/10 hover:border-indigo-500/30 rounded-2xl transition duration-200 cursor-pointer flex gap-3 items-start"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 mt-0.5">
+                      {notif.type === "rsvp" ? "🎉" : notif.type === "payment" ? "💸" : notif.type === "photo" ? "📸" : "🔔"}
+                    </div>
+                    <div className="flex-1 text-left space-y-1">
+                      <p className="text-xs text-slate-200 font-medium leading-relaxed">{notif.text}</p>
+                      <span className="text-[10px] text-slate-500 font-mono block">{notif.time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS MODAL VIEW */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-[#141b31] border border-indigo-500/20 w-full max-w-md rounded-3xl p-6 shadow-2xl relative space-y-6">
+            <div className="flex justify-between items-center border-b border-indigo-500/10 pb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <svg className="w-5 h-5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                Configurações Gerais
+              </h3>
+              <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Fechar</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Notif checkbox */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Notificações Push / WhatsApp</span>
+                  <span className="text-[9px] text-slate-500 block">Receba avisos instantâneos de novos convidados e pagamentos.</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={prefNotifications} 
+                  onChange={(e) => setPrefNotifications(e.target.checked)} 
+                  className="w-4 h-4 accent-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Privacy checkbox */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
+                <div className="text-left">
+                  <span className="text-xs font-bold block">Perfil Público na Rede</span>
+                  <span className="text-[9px] text-slate-500 block">Permita que amigos encontrem seu perfil ao criar convites.</span>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={prefPrivacy} 
+                  onChange={(e) => setPrefPrivacy(e.target.checked)} 
+                  className="w-4 h-4 accent-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Theme Selector */}
+              <div>
+                <label className="block text-[10px] font-mono text-indigo-300 uppercase mb-2 text-left">Tema Visual</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {["dark", "neon", "glass"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setPrefTheme(t)}
+                      className={`py-2 text-xs font-mono capitalize border rounded-xl cursor-pointer ${
+                        prefTheme === t 
+                          ? "bg-indigo-500 border-transparent text-white font-bold" 
+                          : "bg-slate-950/40 border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Language Selector */}
+              <div>
+                <label className="block text-[10px] font-mono text-indigo-300 uppercase mb-2 text-left">Idioma</label>
+                <select
+                  value={prefLanguage}
+                  onChange={(e) => setPrefLanguage(e.target.value)}
+                  className="w-full bg-slate-950/40 border border-indigo-500/15 focus:border-indigo-400 p-3 rounded-xl outline-none text-xs text-indigo-200"
+                >
+                  <option value="pt-BR">Português (Brasil)</option>
+                  <option value="en-US">English (United States)</option>
+                  <option value="es-ES">Español (España)</option>
+                </select>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => {
+                setShowSettingsModal(false);
+                alert("Preferências gravadas com sucesso!");
+              }} 
+              className="w-full py-3 bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg cursor-pointer"
+            >
+              Salvar Configurações
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PLAN & SUBSCRIPTION MODAL VIEW */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-[#141b31] border border-indigo-500/20 w-full max-w-md rounded-3xl p-6 shadow-2xl relative space-y-6">
+            <div className="flex justify-between items-center border-b border-indigo-500/10 pb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <svg className="w-5 h-5 text-pink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"></polygon><line x1="12" y1="22" x2="12" y2="15.5"></line><polyline points="22 8.5 12 15.5 2 8.5"></polyline><polyline points="2 15.5 12 8.5 22 15.5"></polyline><line x1="12" y1="2" x2="12" y2="8.5"></line></svg>
+                Planos & Assinatura
+              </h3>
+              <button onClick={() => setShowPlanModal(false)} className="text-slate-400 hover:text-white text-xs font-mono cursor-pointer">Fechar</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Current plan banner */}
+              <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-left">
+                <span className="text-[9px] font-mono text-indigo-400 uppercase tracking-widest block">PLANO ATUAL</span>
+                <div className="flex justify-between items-center mt-1">
+                  <h4 className="text-md font-bold text-white">{isPro ? "Solstice Pro Lite" : "Solstice Free"}</h4>
+                  <span className="text-xs font-mono text-indigo-300 font-semibold">{isPro ? "R$ 49,90 /mês" : "Gratuito"}</span>
+                </div>
+              </div>
+
+              {/* Comparative list of features */}
+              <div className="space-y-3">
+                <span className="block text-[10px] font-mono text-slate-400 uppercase text-left">Benefícios do Upgrade</span>
+                <div className="space-y-2 text-left text-xs">
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <span className="text-emerald-400">✓</span>
+                    <span><strong>Check-in Digital & Portaria Pro:</strong> Scanner de QR Code e relatórios.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <span className="text-emerald-400">✓</span>
+                    <span><strong>Álbum Ilimitado:</strong> Upload de fotos sem limites de resolução ou tamanho.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <span className="text-emerald-400">✓</span>
+                    <span><strong>Vaquinha Sem Taxas:</strong> Receba cotas integralmente no Pix direto para sua chave.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <span className="text-emerald-400">✓</span>
+                    <span><strong>Domínio e Templates Exclusivos:</strong> Layouts VIP com links customizados.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upgrade Trigger or Downgrade */}
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl space-y-3">
+                {isPro ? (
+                  <div className="space-y-3 text-left">
+                    <p className="text-xs text-slate-300">Sua assinatura está ativa. Próxima renovação em 09/07/2026.</p>
+                    <button 
+                      onClick={() => {
+                        setIsPro(false);
+                        alert("Assinatura cancelada com sucesso!");
+                      }} 
+                      className="w-full py-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                    >
+                      Cancelar Assinatura PRO
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-left">
+                    <div className="text-left">
+                      <span className="text-[10px] font-mono text-pink-400 uppercase block">OFERTA ESPECIAL</span>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">Assine o **Solstice Pro** por apenas **R$ 29,90/mês** no plano anual e tenha portaria ilimitada.</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setIsPro(true);
+                        alert("Parabéns! Assinatura Solstice PRO ativada via Pix Simulado!");
+                      }} 
+                      className="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-pink-500 hover:shadow-[0_0_20px_rgba(236,72,153,0.3)] text-white rounded-xl text-xs font-bold transition duration-200 cursor-pointer"
+                    >
+                      Fazer Upgrade para PRO ⚡
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FLOAT BOTTOM GLASS NAVBAR */}
       <BottomNav activeTab={activeTab} onTabChange={(tab) => {
