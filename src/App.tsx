@@ -159,7 +159,7 @@ export default function App() {
     : events.slice(2); // mock subset for demo variety
 
   return (
-    <div className="min-h-screen bg-[#0b1226] text-white font-sans select-none relative pb-32">
+    <div className="min-h-screen bg-[#0b1226] text-white font-sans select-none relative pb-32 overflow-x-hidden max-w-full">
       {/* Background radial blurs */}
       <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-pink-500/5 blur-[120px] pointer-events-none" />
