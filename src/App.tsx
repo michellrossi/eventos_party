@@ -8,20 +8,30 @@ import { SolsticeEvent, UserProfile } from "./types";
 import { TEMPLATES } from "./components/TemplateThemes";
 import { 
   Sparkles, ShieldCheck, Activity, Users, Flame, LogOut, Plus, 
-  MapPin, Calendar, Heart, Ticket, Compass, ArrowRight, Wallet, PartyPopper
+  MapPin, Calendar, Heart, Ticket, Compass, ArrowRight, Wallet, PartyPopper, Search
 } from "lucide-react";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [events, setEvents] = useState<SolsticeEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"events" | "explore" | "create" | "vibe">("events");
+  const [activeTab, setActiveTab] = useState<"events" | "search" | "create" | "calendar" | "vibe">("events");
   
   // My Events feed sub-tabs: 'my-hosts' or 'convidado'
   const [eventsFeedCategory, setEventsFeedCategory] = useState<"hosts" | "convidado">("hosts");
 
   // Selected event for detail page drilldown
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  // Search screen states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchCategory, setSearchCategory] = useState("todos");
+
+  // Calendar screen states
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(
+    new Date().toISOString().split("T")[0]
+  );
 
   // Load user profile and initial events
   useEffect(() => {
@@ -81,6 +91,45 @@ export default function App() {
   const handleEventUpdated = (updated: SolsticeEvent) => {
     setEvents(events.map((e) => (e.id === updated.id ? updated : e)));
   };
+
+  // Search logic
+  const filteredEvents = events.filter((evt) => {
+    const query = searchQuery.toLowerCase().trim();
+    const matchesQuery =
+      evt.name.toLowerCase().includes(query) ||
+      (evt.description && evt.description.toLowerCase().includes(query)) ||
+      evt.location.toLowerCase().includes(query);
+    const matchesCategory =
+      searchCategory === "todos" || evt.type === searchCategory;
+    return matchesQuery && matchesCategory;
+  });
+
+  // Calendar logic
+  const getCalendarDays = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    
+    const days = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  };
+
+  const handleMonthChange = (direction: number) => {
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1);
+    setCurrentDate(newDate);
+  };
+
+  const calendarSelectedEvents = events.filter((evt) => {
+    if (!selectedDateStr) return false;
+    return evt.dateTime.split("T")[0] === selectedDateStr;
+  });
 
   // If no user exists, enforce Onboarding Access screen
   if (!currentUser) {
@@ -219,47 +268,173 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: EXPLORE PRE-DEFINED CUSTOM TEMPLATES */}
-        {activeTab === "explore" && (
+        {/* TAB 2: BUSCA DE EVENTOS */}
+        {activeTab === "search" && (
           <div className="space-y-6 animate-fadeIn">
             <div>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-400 block">GALERIA DE ESTILO</span>
-              <h2 className="text-2xl font-bold tracking-tight text-white mt-1">Navegar por Estéticas</h2>
-              <p className="text-xs text-indigo-200/50 mt-1">Conheça nossos envelopes premium para seu convite digital se destacar no feed.</p>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-400 block">ENCONTRE SUA FESTA</span>
+              <h2 className="text-2xl font-bold tracking-tight text-white mt-1">Procurar Eventos</h2>
+              <p className="text-xs text-indigo-200/50 mt-1">Busque eventos por título, descrição ou localização.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {TEMPLATES.map((tpl) => (
-                <div 
-                  key={tpl.id} 
-                  className={`rounded-3xl p-6 border ${tpl.background} ${tpl.fontClass} transition-all hover:scale-[1.02] duration-300 shadow-xl flex flex-col justify-between h-[230px] border-white/10`}
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-2.5">
-                      <h3 className={`text-md font-bold uppercase tracking-wider ${tpl.text}`}>{tpl.name}</h3>
-                      <span className="text-[9px] font-mono tracking-widest uppercase bg-white/10 px-2 py-0.5 rounded text-white border border-white/15">
-                        MODERNO
-                      </span>
-                    </div>
-                    <p className={`text-xs ml-0.5 leading-relaxed ${tpl.textMuted} line-clamp-3`}>
-                      {tpl.description}
-                    </p>
-                  </div>
+            {/* Campo de Busca */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-indigo-400/70" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Pesquise por nome, local ou vibes..."
+                className="block w-full pl-11 pr-4 py-3.5 bg-[#141b31]/80 border border-indigo-500/25 rounded-2xl text-sm placeholder-indigo-200/30 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400/50 shadow-2xl transition duration-200"
+              />
+            </div>
 
-                  <div className="flex items-center justify-between border-t border-white/10 pt-4">
-                    <span className="text-[10px] font-mono text-white/50 tracking-widest uppercase">Grid imersivo</span>
-                    <button
-                      onClick={() => {
-                        setActiveTab("create");
-                        // We set pre-chosen template selection
-                      }}
-                      className={`text-[10px] font-mono uppercase tracking-widest px-4 py-2 border rounded-xl hover:bg-white hover:text-black transition flex items-center gap-1`}
-                    >
-                      Usar Estética <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
+            {/* Filtros de Categoria */}
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {["todos", "aniversario", "churrasco", "casamento", "formatura", "outros"].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSearchCategory(cat)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-mono capitalize transition-all border shrink-0 cursor-pointer ${
+                    searchCategory === cat
+                      ? "bg-gradient-to-r from-indigo-500 to-pink-500 border-transparent text-white font-bold shadow-md shadow-pink-500/10"
+                      : "bg-[#141b31]/40 border-indigo-500/10 text-indigo-200/60 hover:text-indigo-200 hover:border-indigo-500/35"
+                  }`}
+                >
+                  {cat === "todos" ? "Todos" : cat === "aniversario" ? "Aniversário" : cat}
+                </button>
               ))}
+            </div>
+
+            {/* Resultados de Busca */}
+            {filteredEvents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="search-grid">
+                {filteredEvents.map((evt) => (
+                  <EventCard
+                    key={evt.id}
+                    event={evt}
+                    onClick={() => setSelectedEventId(evt.id)}
+                    onManage={() => setSelectedEventId(evt.id)}
+                    currentUserNickname={currentUser.nickname}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 bg-[#141b31]/30 rounded-3xl border border-indigo-500/5">
+                <Search className="w-10 h-10 text-indigo-400/30 mx-auto mb-3" />
+                <p className="text-sm text-indigo-200/40">Nenhum evento encontrado para a sua busca.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: CALENDÁRIO DE EVENTOS */}
+        {activeTab === "calendar" && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-400 block">AGENDA SOLSTICE</span>
+                <h2 className="text-2xl font-bold tracking-tight text-white mt-1">Calendário</h2>
+              </div>
+              <div className="flex items-center gap-2 bg-[#141b31]/80 border border-indigo-500/15 rounded-2xl px-3 py-1.5 text-xs font-mono text-indigo-300">
+                <button
+                  onClick={() => handleMonthChange(-1)}
+                  className="p-1 hover:text-white transition cursor-pointer"
+                >
+                  &lt;
+                </button>
+                <span className="min-w-[120px] text-center uppercase tracking-wide font-bold">
+                  {currentDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                </span>
+                <button
+                  onClick={() => handleMonthChange(1)}
+                  className="p-1 hover:text-white transition cursor-pointer"
+                >
+                  &gt;
+                </button>
+              </div>
+            </div>
+
+            {/* Grid do Calendário */}
+            <div className="bg-[#141b31]/60 border border-indigo-500/15 rounded-3xl p-5 shadow-2xl">
+              {/* Dias da semana */}
+              <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map((day) => (
+                  <span key={day} className="text-[10px] font-mono font-bold text-indigo-200/40 py-1">
+                    {day}
+                  </span>
+                ))}
+              </div>
+
+              {/* Dias do mês */}
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {getCalendarDays().map((day, idx) => {
+                  if (!day) {
+                    return <div key={`empty-${idx}`} className="aspect-square" />;
+                  }
+
+                  const dateStr = day.toISOString().split("T")[0];
+                  const hasEvents = events.some(
+                    (evt) => evt.dateTime.split("T")[0] === dateStr
+                  );
+                  const isSelected = selectedDateStr === dateStr;
+                  const isToday = new Date().toISOString().split("T")[0] === dateStr;
+
+                  return (
+                    <button
+                      key={dateStr}
+                      onClick={() => setSelectedDateStr(dateStr)}
+                      className={`aspect-square flex flex-col items-center justify-center rounded-xl relative transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-gradient-to-r from-indigo-500 to-pink-500 text-white font-bold scale-105 shadow-md shadow-pink-500/10"
+                          : isToday
+                          ? "border border-indigo-400 text-indigo-300 font-semibold"
+                          : "hover:bg-indigo-500/10 text-indigo-200/70"
+                      }`}
+                    >
+                      <span className="text-xs font-mono">{day.getDate()}</span>
+                      {hasEvents && (
+                        <span
+                          className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${
+                            isSelected ? "bg-white" : "bg-pink-500 animate-pulse shadow-[0_0_4px_rgba(236,72,153,0.8)]"
+                          }`}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Lista de Eventos para o Dia Selecionado */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-mono tracking-widest text-indigo-200/50 uppercase">
+                {selectedDateStr ? (
+                  <>Eventos em {new Date(selectedDateStr + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</>
+                ) : (
+                  "Selecione um dia no calendário"
+                )}
+              </h3>
+
+              {calendarSelectedEvents.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {calendarSelectedEvents.map((evt) => (
+                    <EventCard
+                      key={evt.id}
+                      event={evt}
+                      onClick={() => setSelectedEventId(evt.id)}
+                      onManage={() => setSelectedEventId(evt.id)}
+                      currentUserNickname={currentUser.nickname}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-[#141b31]/30 rounded-3xl border border-indigo-500/5">
+                  <p className="text-xs text-indigo-200/40">Nenhum evento programado para este dia.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
