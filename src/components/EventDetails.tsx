@@ -6,6 +6,8 @@ import {
   Flame, Music, UploadCloud, Heart, Edit3, Settings, Copy, Share2, 
   ChevronLeft, Users, ShieldAlert, Award, Grid, ListCollapse, ToggleLeft, Sparkles
 } from "lucide-react";
+import PixPayment from "./PixPayment";
+import EventGallery from "./EventGallery";
 
 interface EventDetailsProps {
   eventId: string;
@@ -27,6 +29,13 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
   const [isSubmittingRSVP, setIsSubmittingRSVP] = useState(false);
   const [rsvpSuccess, setRsvpSuccess] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [showPixPayment, setShowPixPayment] = useState(false);
+  const [pixPaymentData, setPixPaymentData] = useState<{
+    amount: number;
+    contributorName: string;
+    message: string;
+  } | null>(null);
+  const [showGalleryView, setShowGalleryView] = useState(false);
 
   // Check if they already have an RSVP record in the event guests list on load
   useEffect(() => {
@@ -90,6 +99,45 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
     );
   }
 
+  if (showPixPayment && pixPaymentData) {
+    return (
+      <PixPayment
+        event={event}
+        currentUser={currentUser}
+        amount={pixPaymentData.amount}
+        onCancel={() => {
+          setShowPixPayment(false);
+          setPixPaymentData(null);
+        }}
+        onSuccess={async () => {
+          try {
+            const res = await fetch(`/api/events/${eventId}/fund`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contributorName: pixPaymentData.contributorName,
+                contributorAvatar: currentUser.avatar,
+                amount: pixPaymentData.amount,
+                message: pixPaymentData.message
+              })
+            });
+            if (res.ok) {
+              const updated = await res.json();
+              setEvent(updated);
+              onEventUpdated(updated);
+              setContribAmount("");
+              setContribMessage("");
+            }
+          } catch (e) {
+            console.error("Erro ao registrar pagamento no servidor:", e);
+          } finally {
+            setShowPixPayment(false);
+            setPixPaymentData(null);
+          }
+        }}
+      />
+    );
+  }
   // Preset Vibe Wall picture assets so users can click to quickly append instead of searching URLs
   const WALL_PRESETS = [
     "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=500&auto=format&fit=crop&q=60",
@@ -142,31 +190,12 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
       return;
     }
 
-    setIsSubmittingFund(true);
-    try {
-      const res = await fetch(`/api/events/${eventId}/fund`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contributorName: contribName.trim(),
-          contributorAvatar: currentUser.avatar,
-          amount,
-          message: contribMessage.trim()
-        })
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setEvent(updated);
-        onEventUpdated(updated);
-        setContribAmount("");
-        setContribMessage("");
-        alert("Contribuição enviada com sucesso! Obrigado por apoiar!");
-      }
-    } catch (e) {
-      alert("Erro ao debitar presente.");
-    } finally {
-      setIsSubmittingFund(false);
-    }
+    setPixPaymentData({
+      amount,
+      contributorName: contribName.trim(),
+      message: contribMessage.trim()
+    });
+    setShowPixPayment(true);
   };
 
   const handleAddVibeWallPic = async (imgUrl: string) => {
@@ -332,6 +361,23 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
   const vaquinhaPercent = event.vaquinhaGoal 
     ? Math.min(100, Math.round(((event.vaquinhaCollected || 0) / event.vaquinhaGoal) * 100))
     : 50;
+
+  if (showGalleryView) {
+    return (
+      <EventGallery
+        event={event}
+        currentUser={currentUser}
+        onBack={() => {
+          setShowGalleryView(false);
+          refreshEvent();
+        }}
+        onLikePhoto={handleLikeVibeCheck}
+        onAddPhoto={async (url) => {
+          await handleAddVibeWallPic(url);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b1226] text-white pb-32 font-sans relative select-none">
@@ -524,31 +570,49 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                       <div className="text-center sm:text-left">
                         <span className="block text-[8px] font-mono tracking-wider text-slate-500 uppercase">VALOR SUGERIDO</span>
                         <span className="text-lg font-black text-white font-mono">
-                          R$ {event.vaquinhaValuePerPerson || "50,00"}
+                          R$ {event.vaquinhaValuePerPerson || "150,00"}
                         </span>
                       </div>
 
-                      <button
-                        id="btn-copy-pix-key"
-                        onClick={handleCopyPixKey}
-                        className={`py-3 px-5 rounded-xl text-xs font-bold transition duration-300 flex items-center justify-center gap-2 select-none cursor-pointer ${
-                          copiedPix 
-                            ? "bg-emerald-500 text-white" 
-                            : "bg-white text-[#0b1226] hover:bg-slate-100"
-                        }`}
-                      >
-                        {copiedPix ? (
-                          <>
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Copiado!</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                            <span>Copiar Chave Pix</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          id="btn-pay-quota-pix"
+                          onClick={() => {
+                            const amount = event.vaquinhaValuePerPerson || 150;
+                            setPixPaymentData({
+                              amount,
+                              contributorName: currentUser.name,
+                              message: "Contribuição de cota do evento"
+                            });
+                            setShowPixPayment(true);
+                          }}
+                          className="py-3 px-5 rounded-xl text-xs font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition duration-300 flex items-center justify-center gap-1.5 select-none cursor-pointer"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          <span>Pagar Cota</span>
+                        </button>
+
+                        <button
+                          id="btn-copy-pix-key"
+                          onClick={handleCopyPixKey}
+                          className={`py-3 px-4 rounded-xl text-xs font-bold transition duration-300 flex items-center justify-center gap-1.5 select-none cursor-pointer ${
+                            copiedPix 
+                              ? "bg-emerald-500 text-white" 
+                              : "bg-white text-[#0b1226] hover:bg-slate-100"
+                          }`}
+                        >
+                          {copiedPix ? (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Social proof of participants */}
@@ -918,9 +982,17 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
 
             {/* DYNAMIC VIBE WALL SHOT SHARING CARD */}
             <div className={`p-6 rounded-3xl ${currentTheme.cardBg} border ${currentTheme.border} shadow-xl`}>
-              <h3 className={`text-md font-bold tracking-tight uppercase mb-4 ${currentTheme.text} flex items-center gap-1.5`}>
-                <Music className="w-4.5 h-4.5 text-pink-400" /> Mural de Vibes Coletivo
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className={`text-md font-bold tracking-tight uppercase ${currentTheme.text} flex items-center gap-1.5`}>
+                  <Music className="w-4.5 h-4.5 text-pink-400" /> Mural de Vibes Coletivo
+                </h3>
+                <button
+                  onClick={() => setShowGalleryView(true)}
+                  className="text-[11px] font-bold text-indigo-400 hover:text-white transition flex items-center gap-1 font-mono uppercase bg-indigo-500/10 px-3 py-1.5 rounded-xl border border-indigo-500/20"
+                >
+                  Ver Galeria Completa ➔
+                </button>
+              </div>
 
               {/* Uploader field */}
               <div className="space-y-4 mb-6">
