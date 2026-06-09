@@ -20,7 +20,7 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
   const [event, setEvent] = useState<SolsticeEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"organizer" | "guest">("guest");
-  const [organizerTab, setOrganizerTab] = useState<"pagos" | "pendentes">("pagos");
+  const [organizerTab, setOrganizerTab] = useState<"pagos" | "pendentes" | "aprovacoes">("pagos");
   const [organizerMainTab, setOrganizerMainTab] = useState<"finance" | "reception" | "broadcast" | "retro">("finance");
   
   // Pro check-in scanner states
@@ -29,6 +29,15 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
   const [scannedGuest, setScannedGuest] = useState<Guest | null>(null);
   const [checkedInIds, setCheckedInIds] = useState<string[]>([]);
   const [searchCheckIn, setSearchCheckIn] = useState("");
+
+  // RSVP Custom Answers & Comment states
+  const [customAnswers, setCustomAnswers] = useState<{ [questionId: string]: string }>({});
+  const [publicComment, setPublicComment] = useState("");
+
+  // Text Blasting States
+  const [isBlasting, setIsBlasting] = useState(false);
+  const [blastProgress, setBlastProgress] = useState(0);
+  const [blastSuccessMessage, setBlastSuccessMessage] = useState("");
 
   // Communication & History states
   const [broadcastMessage, setBroadcastMessage] = useState("");
@@ -180,7 +189,12 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
            name: rsvpName.trim(),
            phone: rsvpPhone.trim(),
            status: rsvpStatus,
-           avatar: currentUser.avatar
+           avatar: currentUser.avatar,
+           customAnswers: Object.entries(customAnswers).map(([questionId, answer]) => ({
+             questionId,
+             answer
+           })),
+           publicComment: publicComment.trim()
          })
        });
        if (res.ok) {
@@ -328,6 +342,78 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
       }
     } catch (err) {
       console.error("Erro ao alterar status de pagamento:", err);
+    }
+  };
+
+  const handleApproveGuest = async (guestId: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/guests/${guestId}/approve`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEvent(updated);
+        onEventUpdated(updated);
+      }
+    } catch (err) {
+      console.error("Erro ao aprovar convidado:", err);
+    }
+  };
+
+  const handleRejectGuest = async (guestId: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/guests/${guestId}/reject`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setEvent(updated);
+        onEventUpdated(updated);
+      }
+    } catch (err) {
+      console.error("Erro ao recusar convidado:", err);
+    }
+  };
+
+  const handleTextBlast = async () => {
+    if (!broadcastMessage.trim()) {
+      alert("Digite um comunicado para disparar!");
+      return;
+    }
+    setIsBlasting(true);
+    setBlastProgress(0);
+    setBlastSuccessMessage("");
+
+    const interval = setInterval(() => {
+      setBlastProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(interval);
+          return 90;
+        }
+        return prev + 10;
+      });
+    }, 150);
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/blast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: broadcastMessage })
+      });
+      clearInterval(interval);
+      setBlastProgress(100);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setBlastSuccessMessage(`Sucesso! Comunicado enviado automaticamente via SMS/WhatsApp para ${data.count} convidado(s) confirmado(s).`);
+        setBroadcastMessage("");
+      } else {
+        alert(data.error || "Erro ao disparar mensagens.");
+      }
+    } catch (err) {
+      clearInterval(interval);
+      alert("Erro de comunicação com o servidor.");
+    } finally {
+      setIsBlasting(false);
     }
   };
 
@@ -781,6 +867,16 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
 
                   {/* Minimal identification forms */}
                   <form onSubmit={handleRSVPSubmit} className="space-y-4 pt-2">
+                    {event.requiresApproval && (
+                      <div className="text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-2.5 animate-fadeIn">
+                        <ShieldAlert className="w-4.5 h-4.5 flex-shrink-0 mt-0.5 text-amber-500" />
+                        <div className="text-left">
+                          <span className="font-bold block text-sm">Lista de Espera / Moderação</span>
+                          O anfitrião exige aprovação dos convidados para esta comemoração. Sua presença ficará como "Pendente" até ser aprovada.
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-mono tracking-wider uppercase text-slate-400/60 mb-1.5 ml-1">Seu Nome Completo</label>
@@ -802,6 +898,33 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                           value={rsvpPhone}
                           onChange={(e) => setRsvpPhone(e.target.value)}
                           placeholder="Ex: (11) 99999-9999"
+                          className="w-full bg-[#0b101f] border border-slate-800 focus:border-indigo-500/75 p-4 rounded-2xl outline-none text-sm text-white placeholder-slate-600 transition"
+                        />
+                      </div>
+
+                      {/* Renderizar perguntas personalizadas */}
+                      {event.customQuestions && event.customQuestions.map((q) => (
+                        <div key={q.id}>
+                          <label className="block text-[10px] font-mono tracking-wider uppercase text-slate-400/60 mb-1.5 ml-1">{q.questionText}</label>
+                          <input
+                            type="text"
+                            value={customAnswers[q.id] || ""}
+                            onChange={(e) => setCustomAnswers({ ...customAnswers, [q.id]: e.target.value })}
+                            placeholder="Sua resposta"
+                            className="w-full bg-[#0b101f] border border-slate-800 focus:border-indigo-500/75 p-4 rounded-2xl outline-none text-sm text-white placeholder-slate-600 transition"
+                          />
+                        </div>
+                      ))}
+
+                      {/* Recado público opcional */}
+                      <div>
+                        <label className="block text-[10px] font-mono tracking-wider uppercase text-slate-400/60 mb-1.5 ml-1">Deixe um Recado Público (opcional)</label>
+                        <input
+                          id="guest-rsvp-comment"
+                          type="text"
+                          value={publicComment}
+                          onChange={(e) => setPublicComment(e.target.value)}
+                          placeholder="Ex: Não vejo a hora! Chegando às 22h."
                           className="w-full bg-[#0b101f] border border-slate-800 focus:border-indigo-500/75 p-4 rounded-2xl outline-none text-sm text-white placeholder-slate-600 transition"
                         />
                       </div>
@@ -1082,6 +1205,29 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                 </div>
               )}
             </div>
+
+            {/* MURAL DE RECADOS / FEED SOCIAL */}
+            {event.guests?.some(g => g.publicComment) && (
+              <div className={`p-6 rounded-3xl ${currentTheme.cardBg} border ${currentTheme.border} shadow-xl text-left`}>
+                <h3 className={`text-md font-bold tracking-tight uppercase ${currentTheme.text} flex items-center gap-1.5 mb-4`}>
+                  <Sparkles className="w-4.5 h-4.5 text-pink-400" /> Mural de Recados
+                </h3>
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {event.guests.filter(g => g.publicComment).map(g => (
+                    <div key={g.id} className="bg-[#0b101f]/60 border border-slate-800/60 p-3.5 rounded-2xl flex items-start gap-3 animate-fadeIn text-left">
+                      <img src={g.avatar} alt={g.name} className="w-8 h-8 rounded-full object-cover border border-white/10 mt-0.5" />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white">{g.name}</span>
+                          <span className="text-[9px] font-mono text-slate-500">{new Date(g.confirmedAt).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 italic">"{g.publicComment}"</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* CONFIRMED ATTENDEES COLLAPSIBLE ACCORDION */}
             <div className={`p-6 rounded-3xl ${currentTheme.cardBg} border ${currentTheme.border} shadow-xl`}>
@@ -1387,7 +1533,7 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
               </h2>
               
               {/* Tab options built to resemble the reference layout */}
-              <div className="bg-[#141b2f] border border-slate-800 p-1.5 rounded-full flex gap-1 shadow-inner self-start">
+              <div className="bg-[#141b2f] border border-slate-800 p-1.5 rounded-full flex gap-1 shadow-inner self-start flex-wrap">
                 <button
                   onClick={() => setOrganizerTab("pagos")}
                   className={`px-5 py-2 text-xs font-bold tracking-tight rounded-full transition-all duration-300 ${
@@ -1408,12 +1554,100 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                 >
                   Pendentes
                 </button>
+                {event.requiresApproval && (
+                  <button
+                    onClick={() => setOrganizerTab("aprovacoes")}
+                    className={`px-5 py-2 text-xs font-bold tracking-tight rounded-full transition-all duration-300 ${
+                      organizerTab === "aprovacoes"
+                        ? "bg-[#6366f1] text-white shadow-lg shadow-indigo-500/20"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    Aprovações ({event.guests?.filter(g => g.status === "PENDENTE_APROVACAO").length || 0})
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Dynamic Loop output based on selected sub list */}
             <div className="space-y-3 animate-fadeIn">
               {(() => {
+                if (organizerTab === "aprovacoes") {
+                  const pendingList = event.guests?.filter((g) => g.status === "PENDENTE_APROVACAO") || [];
+                  if (pendingList.length === 0) {
+                    return (
+                      <div className="text-center py-10 bg-[#12192c]/40 border border-slate-800/50 rounded-[32px] text-xs text-slate-400/80">
+                        Nenhuma solicitação pendente no momento.
+                      </div>
+                    );
+                  }
+                  return pendingList.map((g) => (
+                    <div 
+                      key={g.id} 
+                      className="bg-[#12192c] rounded-[32px] border border-indigo-500/10 p-5 flex flex-col gap-4 shadow-xl text-left"
+                    >
+                      <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                        <div className="flex items-center gap-4">
+                          <div className="relative flex-shrink-0">
+                            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 blur-[2px] opacity-75" />
+                            <img 
+                              src={g.avatar} 
+                              alt={g.name} 
+                              className="w-12 h-12 rounded-full object-cover relative border border-[#12192c] z-10" 
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="space-y-0.5 text-left">
+                            <h4 className="text-sm font-extrabold text-white font-sans">{g.name}</h4>
+                            <p className="text-[11px] text-amber-300/85 font-medium leading-tight">
+                              {g.phone ? `Whats: ${g.phone}` : "Sem telefone"} • RSVP em {new Date(g.confirmedAt).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <button
+                            onClick={() => handleApproveGuest(g.id)}
+                            className="bg-emerald-500 hover:bg-emerald-400 text-[#091b11] text-[10px] font-black tracking-widest px-4 py-2 rounded-full transition cursor-pointer"
+                          >
+                            APROVAR
+                          </button>
+                          <button
+                            onClick={() => handleRejectGuest(g.id)}
+                            className="border border-rose-500/30 bg-rose-500/10 text-rose-400 text-[10px] font-black tracking-widest px-4 py-2 rounded-full hover:bg-rose-500 hover:text-white transition cursor-pointer"
+                          >
+                            RECUSAR
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Respostas customizadas */}
+                      {g.customAnswers && g.customAnswers.length > 0 && (
+                        <div className="bg-[#0b101f] border border-slate-800/50 p-3.5 rounded-2xl text-xs space-y-2">
+                          <span className="text-[9px] font-mono text-indigo-400 uppercase tracking-wider block font-bold">Respostas do Convidado</span>
+                          {g.customAnswers.map((ans) => {
+                            const quest = event.customQuestions?.find((q) => q.id === ans.questionId);
+                            return (
+                              <div key={ans.questionId} className="border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                                <span className="block text-slate-400 font-semibold">{quest ? quest.questionText : "Pergunta deletada"}</span>
+                                <span className="text-white font-medium">{ans.answer || "(Sem resposta)"}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Recado público se tiver */}
+                      {g.publicComment && (
+                        <div className="bg-[#0b101f] border border-slate-800/50 p-3.5 rounded-2xl text-xs">
+                          <span className="text-[9px] font-mono text-pink-400 uppercase tracking-wider block font-bold mb-1">Recado Público</span>
+                          <span className="text-slate-300 italic font-medium">"{g.publicComment}"</span>
+                        </div>
+                      )}
+                    </div>
+                  ));
+                }
+
                 const isViewPagos = organizerTab === "pagos";
                 const activeList = event.guests?.filter((g) => {
                   const confirmed = g.status === "VOU" || g.status === "TALVEZ";
@@ -1431,59 +1665,85 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                 return activeList.map((g) => (
                   <div 
                     key={g.id} 
-                    className="bg-[#12192c] rounded-[32px] border border-indigo-500/10 p-5 flex items-center justify-between shadow-xl flex-wrap sm:flex-nowrap gap-4"
+                    className="bg-[#12192c] rounded-[32px] border border-indigo-500/10 p-5 flex flex-col gap-4 shadow-xl text-left animate-fadeIn"
                   >
-                    {/* Left: Avatar with glowing back ring & identification details */}
-                    <div className="flex items-center gap-4">
-                      <div className="relative flex-shrink-0">
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#6366f1] to-pink-500 blur-[2px] opacity-75" />
-                        <img 
-                          src={g.avatar} 
-                          alt={g.name} 
-                          className="w-12 h-12 rounded-full object-cover relative border border-[#12192c] z-10" 
-                          referrerPolicy="no-referrer"
-                        />
+                    <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                      {/* Left: Avatar with glowing back ring & identification details */}
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex-shrink-0">
+                          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#6366f1] to-pink-500 blur-[2px] opacity-75" />
+                          <img 
+                            src={g.avatar} 
+                            alt={g.name} 
+                            className="w-12 h-12 rounded-full object-cover relative border border-[#12192c] z-10" 
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <div className="space-y-0.5 text-left">
+                          <h4 className="text-sm font-extrabold text-white font-sans">{g.name}</h4>
+                          <p className="text-[11px] text-indigo-300/85 font-medium leading-tight">
+                            {g.phone ? `Whats: ${g.phone}` : "Sem telefone"} • Confirmado em {new Date(g.confirmedAt).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
                       </div>
-                      <div className="space-y-0.5 text-left">
-                        <h4 className="text-sm font-extrabold text-white font-sans">{g.name}</h4>
-                        <p className="text-[11px] text-indigo-300/85 font-medium leading-tight">
-                          {g.phone ? `Whats: ${g.phone}` : "Sem telefone"} • Confirmado em {new Date(g.confirmedAt).toLocaleDateString('pt-BR')}
-                        </p>
+
+                      {/* Right: Interactive Badge or Reminder option */}
+                      <div className="flex-shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
+                        {isViewPagos ? (
+                          <button
+                            onClick={() => handleTogglePaid(g.id)}
+                            className="border border-[#2edbde]/45 bg-[#2edbde]/10 text-[#2edbde] text-[10px] font-black tracking-widest px-4 py-2 rounded-full hover:bg-rose-500/15 hover:border-rose-500 hover:text-rose-400 transition cursor-pointer"
+                            title="Clique para revogar pagamento"
+                          >
+                            PAGO
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleTogglePaid(g.id)}
+                              className="border border-slate-700 bg-slate-800 text-slate-300 text-[10px] font-black tracking-widest px-4 py-2 rounded-full hover:border-[#2edbde] hover:bg-[#2edbde]/10 hover:text-[#2edbde] transition cursor-pointer"
+                              title="Marcar como Pago manualmente"
+                            >
+                              PAGAR
+                            </button>
+                            
+                            <button
+                              onClick={() => handleSendWhatsAppReminder(g)}
+                              className="bg-emerald-500 hover:bg-emerald-400 text-white p-2.5 rounded-full hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-300 flex items-center justify-center h-10 w-10 cursor-pointer"
+                              title="Enviar cobrança / link Pix pelo WhatsApp"
+                            >
+                              <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.1 1.448 4.7 1.449 5.4 0 9.8-4.399 9.8-9.799-.002-2.615-1.012-5.074-2.86-6.924C16.435 1.93 13.982.93 11.998.93c-5.4 0-9.8 4.4-9.8 9.8 0 1.8.5 3.5 1.4 5.1l-.8 3.3 3.3-.8zM17.487 14.39c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.28-.47-2.45-1.51-.9-.8-1.53-1.8-1.7-2.1-.18-.3-.02-.47.13-.62.14-.13.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.07-.15-.68-1.62-.93-2.22-.24-.59-.49-.51-.68-.52-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.28.3-1.07 1.05-1.07 2.56s1.1 2.97 1.25 3.17c.15.2 2.16 3.29 5.23 4.61.73.31 1.3.5 1.74.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.29.18-1.42-.07-.13-.27-.2-.57-.35z"/>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Right: Interactive Badge or Reminder option */}
-                    <div className="flex-shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
-                      {isViewPagos ? (
-                        <button
-                          onClick={() => handleTogglePaid(g.id)}
-                          className="border border-[#2edbde]/45 bg-[#2edbde]/10 text-[#2edbde] text-[10px] font-black tracking-widest px-4 py-2 rounded-full hover:bg-rose-500/15 hover:border-rose-500 hover:text-rose-400 transition"
-                          title="Clique para revogar pagamento"
-                        >
-                          PAGO
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleTogglePaid(g.id)}
-                            className="border border-slate-700 bg-slate-800 text-slate-300 text-[10px] font-black tracking-widest px-4 py-2 rounded-full hover:border-[#2edbde] hover:bg-[#2edbde]/10 hover:text-[#2edbde] transition"
-                            title="Marcar como Pago manualmente"
-                          >
-                            PAGAR
-                          </button>
-                          
-                          <button
-                            onClick={() => handleSendWhatsAppReminder(g)}
-                            className="bg-emerald-500 hover:bg-emerald-400 text-white p-2.5 rounded-full hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-300 flex items-center justify-center h-10 w-10 cursor-pointer"
-                            title="Enviar cobrança / link Pix pelo WhatsApp"
-                          >
-                            <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-                              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.1 1.448 4.7 1.449 5.4 0 9.8-4.399 9.8-9.799-.002-2.615-1.012-5.074-2.86-6.924C16.435 1.93 13.982.93 11.998.93c-5.4 0-9.8 4.4-9.8 9.8 0 1.8.5 3.5 1.4 5.1l-.8 3.3 3.3-.8zM17.487 14.39c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.28-.47-2.45-1.51-.9-.8-1.53-1.8-1.7-2.1-.18-.3-.02-.47.13-.62.14-.13.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.07-.15-.68-1.62-.93-2.22-.24-.59-.49-.51-.68-.52-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.28.3-1.07 1.05-1.07 2.56s1.1 2.97 1.25 3.17c.15.2 2.16 3.29 5.23 4.61.73.31 1.3.5 1.74.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.29.18-1.42-.07-.13-.27-.2-.57-.35z"/>
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {/* Respostas customizadas */}
+                    {g.customAnswers && g.customAnswers.length > 0 && (
+                      <div className="bg-[#0b101f] border border-slate-800/50 p-3 rounded-2xl text-xs space-y-2">
+                        <span className="text-[9px] font-mono text-indigo-400 uppercase tracking-wider block font-bold">Respostas do Convidado</span>
+                        {g.customAnswers.map((ans) => {
+                          const quest = event.customQuestions?.find((q) => q.id === ans.questionId);
+                          return (
+                            <div key={ans.questionId} className="border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                              <span className="block text-slate-400 font-semibold">{quest ? quest.questionText : "Pergunta deletada"}</span>
+                              <span className="text-white font-medium">{ans.answer || "(Sem resposta)"}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Recado público se tiver */}
+                    {g.publicComment && (
+                      <div className="bg-[#0b101f] border border-slate-800/50 p-3 rounded-2xl text-xs">
+                        <span className="text-[9px] font-mono text-pink-400 uppercase tracking-wider block font-bold mb-1">Recado Público</span>
+                        <span className="text-slate-300 italic font-medium">"{g.publicComment}"</span>
+                      </div>
+                    )}
                   </div>
                 ));
               })()}
@@ -1744,12 +2004,18 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
           {organizerMainTab === "broadcast" && (
             <div className="bg-[#12192c]/90 border border-indigo-500/10 rounded-[32px] p-6 space-y-5 shadow-2xl text-left animate-fadeIn">
               <span className="inline-flex items-center px-4 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-[10px] font-bold font-mono tracking-widest text-pink-400 uppercase">
-                Mensagem Geral para Convidados (Pro)
+                Text Blasting: Mensagem Automática SMS/WhatsApp (Pro)
               </span>
 
               <p className="text-xs text-slate-400 leading-relaxed">
-                Dispare atualizações sobre o local, lembretes de última hora ou atualizações de vaquinha para todos os convidados confirmados por WhatsApp de uma vez.
+                Envie comunicados automáticos via SMS e WhatsApp em lote diretamente pelo servidor para todos os convidados confirmados ('VOU').
               </p>
+
+              {blastSuccessMessage && (
+                <div className="text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-2xl animate-fadeIn text-left">
+                  {blastSuccessMessage}
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div>
@@ -1758,27 +2024,35 @@ export default function EventDetails({ eventId, onBack, currentUser, onEventUpda
                     rows={4}
                     value={broadcastMessage}
                     onChange={(e) => setBroadcastMessage(e.target.value)}
+                    disabled={isBlasting}
                     placeholder="Ex: Pessoal, o local do evento foi atualizado! Venham no endereço indicado no portal..."
                     className="w-full bg-slate-950/40 border border-indigo-500/15 focus:border-indigo-400 p-4 rounded-2xl outline-none text-xs text-white resize-none"
                   />
                 </div>
 
+                {isBlasting && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-mono text-slate-400">
+                      <span>Disparando mensagens em lote...</span>
+                      <span>{blastProgress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-950/45 h-2.5 rounded-full overflow-hidden border border-slate-800/60 select-none">
+                      <div 
+                        className="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] h-full rounded-full transition-all duration-200" 
+                        style={{ width: `${blastProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!broadcastMessage.trim()) {
-                      alert("Digite um recado para enviar!");
-                      return;
-                    }
-                    const messageText = `Comunicado Solstice: *${event.name}*\n\n${broadcastMessage}`;
-                    const shareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
-                    window.open(shareUrl, "_blank");
-                    alert("Redirecionando para o envio em massa via WhatsApp.");
-                  }}
-                  className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                  onClick={handleTextBlast}
+                  disabled={isBlasting || !broadcastMessage.trim()}
+                  className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-400 text-white rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 transition"
                 >
                   <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.1 1.448 4.7 1.449 5.4 0 9.8-4.399 9.8-9.799-.002-2.615-1.012-5.074-2.86-6.924C16.435 1.93 13.982.93 11.998.93c-5.4 0-9.8 4.4-9.8 9.8 0 1.8.5 3.5 1.4 5.1l-.8 3.3 3.3-.8zM17.487 14.39c-.3-.15-1.78-.88-2.05-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.95 1.18-.18.2-.35.23-.65.08-.3-.15-1.28-.47-2.45-1.51-.9-.8-1.53-1.8-1.7-2.1-.18-.3-.02-.47.13-.62.14-.13.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.07-.15-.68-1.62-.93-2.22-.24-.59-.49-.51-.68-.52-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.28.3-1.07 1.05-1.07 2.56s1.1 2.97 1.25 3.17c.15.2 2.16 3.29 5.23 4.61.73.31 1.3.5 1.74.64.73.23 1.4.2 1.93.12.59-.09 1.78-.73 2.03-1.43.25-.7.25-1.29.18-1.42-.07-.13-.27-.2-.57-.35z"/></svg>
-                  Disparar Mensagem pelo WhatsApp
+                  {isBlasting ? "Disparando..." : "Disparar via SMS / WhatsApp Coletivo"}
                 </button>
               </div>
             </div>

@@ -2,14 +2,28 @@
  * Types representing events, guests, fund contributions, and user sessions.
  */
 
+export interface CustomQuestion {
+  id: string;
+  questionText: string;
+  type: 'text' | 'multiple_choice';
+  options?: string[];
+}
+
+export interface GuestResponse {
+  questionId: string;
+  answer: string;
+}
+
 export interface Guest {
   id: string;
   name: string;
   phone?: string;
   avatar: string;
-  status: 'VOU' | 'TALVEZ' | 'NÃO VOU';
+  status: 'VOU' | 'TALVEZ' | 'NÃO VOU' | 'PENDENTE_APROVACAO';
   confirmedAt: string;
   paid?: boolean;
+  customAnswers?: GuestResponse[];
+  publicComment?: string;
 }
 
 export interface Contribution {
@@ -68,6 +82,7 @@ export interface SolsticeEvent {
   vibeWall: VibePhoto[];
   
   status: 'ACTIVE' | 'DRAFT' | 'ENDED';
+  customQuestions?: CustomQuestion[];
 }
 
 export interface UserProfile {

@@ -235,7 +235,8 @@ app.post("/api/events", (req, res) => {
     guests: [],
     contributions: [],
     vibeWall: [],
-    status: newEventData.status || "ACTIVE"
+    status: newEventData.status || "ACTIVE",
+    customQuestions: newEventData.customQuestions || []
   };
 
   events.unshift(cleanEvent);
@@ -285,9 +286,15 @@ app.post("/api/events/:id/rsvp", (req, res) => {
     return res.status(404).json({ error: "Evento não encontrado" });
   }
 
-  const { name, phone, avatar, status } = req.body;
+  const { name, phone, avatar, status, customAnswers, publicComment } = req.body;
   if (!name || !status) {
     return res.status(400).json({ error: "Nome e status são obrigatórios" });
+  }
+
+  // If requires approval, set status to PENDENTE_APROVACAO instead of 'VOU' or 'TALVEZ'
+  let targetStatus = status;
+  if (event.requiresApproval && (status === "VOU" || status === "TALVEZ")) {
+    targetStatus = "PENDENTE_APROVACAO";
   }
 
   const guestId = "g-" + Math.floor(Math.random() * 100000);
@@ -296,8 +303,10 @@ app.post("/api/events/:id/rsvp", (req, res) => {
     name,
     phone: phone || "",
     avatar: avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuBNCV4-eHpvPuW5TzqjJE7wuHUafcHpR4haj9FaBRIS9j7mLCko6G3rO4wCMGazWbmJk4RKYse_2Qzypy6i8APrWiCq5RJRx8Lm_E7ox8zW4Oxk2gHu8KtkiE-LwKJQNEr--GuOig-Xf46AlLmU-0LERrjwrV0pADd8jGj7lRu-yPFXsg-xQG3AKcf7T4Yu4AdQH1jtJenqTvXkmmlYWLQdL7Rm0bKBUfSKbCoSG3Jek9ObHMaUlEO5m0rqmqqu0oHe7rhRIvQfU38",
-    status,
-    confirmedAt: new Date().toISOString()
+    status: targetStatus,
+    confirmedAt: new Date().toISOString(),
+    customAnswers: customAnswers || [],
+    publicComment: publicComment || ""
   };
 
   // Remove existing RSVP from same name to clean up duplicates
@@ -323,6 +332,71 @@ app.post("/api/events/:id/guests/:guestId/toggle-paid", (req, res) => {
   guest.paid = !guest.paid;
   savePersistedData();
   res.json(event);
+});
+
+// 6c. Approve pending guest
+app.post("/api/events/:id/guests/:guestId/approve", (req, res) => {
+  const event = events.find((e) => e.id === req.params.id);
+  if (!event) {
+    return res.status(404).json({ error: "Evento não encontrado" });
+  }
+
+  const guest = event.guests.find((g) => g.id === req.params.guestId);
+  if (!guest) {
+    return res.status(404).json({ error: "Convidado não encontrado" });
+  }
+
+  guest.status = "VOU";
+  savePersistedData();
+  res.json(event);
+});
+
+// 6d. Reject/Remove pending guest
+app.post("/api/events/:id/guests/:guestId/reject", (req, res) => {
+  const event = events.find((e) => e.id === req.params.id);
+  if (!event) {
+    return res.status(404).json({ error: "Evento não encontrado" });
+  }
+
+  const guest = event.guests.find((g) => g.id === req.params.guestId);
+  if (!guest) {
+    return res.status(404).json({ error: "Convidado não encontrado" });
+  }
+
+  guest.status = "NÃO VOU";
+  savePersistedData();
+  res.json(event);
+});
+
+// 6e. Automated Text Blast Dispatch
+app.post("/api/events/:id/blast", (req, res) => {
+  const event = events.find((e) => e.id === req.params.id);
+  if (!event) {
+    return res.status(404).json({ error: "Evento não encontrado" });
+  }
+
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "A mensagem é obrigatória." });
+  }
+
+  // Select all guests who are confirmed ('VOU') and have phone numbers
+  const confirmedPhones = event.guests
+    .filter((g) => g.status === "VOU" && g.phone)
+    .map((g) => ({ name: g.name, phone: g.phone }));
+
+  console.log(`\n--- [SOLSTICE TEXT BLAST: TWILIO / WA-API SIMULATION] ---`);
+  console.log(`Origem (Host): @solstice-portal`);
+  console.log(`Evento: "${event.name}"`);
+  console.log(`Mensagem disparada em lote: "${message}"`);
+  console.log(`Destinatários confirmados (${confirmedPhones.length}):`);
+  
+  confirmedPhones.forEach((target) => {
+    console.log(` -> Enviado com sucesso para ${target.name} (+55 ${target.phone})`);
+  });
+  console.log(`---------------------------------------------------------\n`);
+
+  res.json({ success: true, count: confirmedPhones.length });
 });
 
 // 7. Contribute to Honeymoon Fund / Vaquinha

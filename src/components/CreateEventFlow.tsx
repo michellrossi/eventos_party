@@ -3,9 +3,60 @@ import { TEMPLATES, getTemplateStyle } from "./TemplateThemes";
 import { 
   Sparkles, Shield, Palette, CheckCircle, 
   MapPin, Calendar, FileText, ArrowRight, ArrowLeft, 
-  DollarSign, Users, Sliders, CheckSquare, Eye, Copy, Share2
+  DollarSign, Users, Sliders, CheckSquare, Eye, Copy, Share2, HelpCircle
 } from "lucide-react";
-import { SolsticeEvent } from "../types";
+import { SolsticeEvent, CustomQuestion } from "../types";
+
+const GIPHY_MOCK_DATA = [
+  {
+    id: "g1",
+    url: "https://media.giphy.com/media/l2JIdnF6aJzAaX7UI/giphy.gif",
+    title: "Neon Retro Party",
+    tags: ["neon", "party", "retro", "disco"]
+  },
+  {
+    id: "g2",
+    url: "https://media.giphy.com/media/3o7aCYT36sQ2v5PZ84/giphy.gif",
+    title: "Synthwave Sunset",
+    tags: ["synthwave", "sunset", "retro", "laser"]
+  },
+  {
+    id: "g3",
+    url: "https://media.giphy.com/media/l3vQYm0jWkWxglaZa/giphy.gif",
+    title: "Disco Mirror Ball",
+    tags: ["disco", "mirror ball", "party", "gold"]
+  },
+  {
+    id: "g4",
+    url: "https://media.giphy.com/media/3o7aCRloybJlXpNjU4/giphy.gif",
+    title: "Liquid Glass Flow",
+    tags: ["liquid", "glass", "ethereal", "abstract"]
+  },
+  {
+    id: "g5",
+    url: "https://media.giphy.com/media/26gR1vv75mK3OqWpW/giphy.gif",
+    title: "Pop Art Dance",
+    tags: ["pop-art", "dance", "fun", "color"]
+  },
+  {
+    id: "g6",
+    url: "https://media.giphy.com/media/xUOxeTkU1NgJJ53gdi/giphy.gif",
+    title: "Clubbing Laser",
+    tags: ["clubbing", "laser", "techno", "electronic"]
+  },
+  {
+    id: "g7",
+    url: "https://media.giphy.com/media/3o85xG8M83N2e4vE5A/giphy.gif",
+    title: "Festival Crowd",
+    tags: ["festival", "crowd", "rave", "dj"]
+  },
+  {
+    id: "g8",
+    url: "https://media.giphy.com/media/l0MYEqEzwOSApPmd2/giphy.gif",
+    title: "Champagne Celebration",
+    tags: ["celebration", "champagne", "toast", "drink"]
+  }
+];
 
 interface CreateEventFlowProps {
   onEventCreated: (newEvent: Partial<SolsticeEvent>) => void;
@@ -38,6 +89,11 @@ export default function CreateEventFlow({ onEventCreated, onCancel, currentUser 
   // Styling Details
   const [selectedTemplate, setSelectedTemplate] = useState("neon-tokyo");
   const [dressingCode, setDressingCode] = useState("Cyber Chic");
+
+  // Custom Questions & Gif details
+  const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
+  const [coverImage, setCoverImage] = useState<string>("");
+  const [gifSearch, setGifSearch] = useState<string>("");
 
   // AI loading indicator
   const [aiLoading, setAiLoading] = useState(false);
@@ -103,7 +159,9 @@ export default function CreateEventFlow({ onEventCreated, onCancel, currentUser 
                        selectedTemplate === "liquid-glass" ? "#022a30" : 
                        selectedTemplate === "obsidian" ? "#050505" : "#1c0d12",
       fontFamily: selectedTemplate === "ethereal" ? "serif" :
-                  selectedTemplate === "obsidian" || selectedTemplate === "neural" ? "mono" : "Outfit"
+                  selectedTemplate === "obsidian" || selectedTemplate === "neural" ? "mono" : "Outfit",
+      customQuestions,
+      coverImage: coverImage || undefined
     };
 
     try {
@@ -442,6 +500,74 @@ export default function CreateEventFlow({ onEventCreated, onCancel, currentUser 
                   </div>
                 )}
               </div>
+
+              {/* Perguntas Personalizadas RSVP */}
+              <div className="pt-6 border-t border-indigo-500/10">
+                <div className="mb-4">
+                  <span className="font-bold text-sm block flex items-center gap-1.5">
+                    <HelpCircle className="w-4 h-4 text-pink-400" /> Perguntas de RSVP (Customizadas)
+                  </span>
+                  <span className="text-[11px] text-indigo-200/50 block">
+                    Faça perguntas personalizadas para os convidados responderem ao confirmar presença.
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {customQuestions.map((q) => (
+                    <div key={q.id} className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/40 border border-indigo-500/10 animate-fadeIn">
+                      <div className="text-left">
+                        <span className="text-xs text-indigo-200 block font-semibold">{q.questionText}</span>
+                        <span className="text-[10px] text-indigo-400/70 font-mono">Tipo: Resposta em Texto</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCustomQuestions(customQuestions.filter((item) => item.id !== q.id))}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg transition"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Adicione uma pergunta (ex: Restrição alimentar? O que vai levar?)"
+                      id="new-question-input"
+                      className="flex-1 bg-[#0a0f1d] border border-indigo-500/15 focus:border-indigo-400 px-3 py-2.5 rounded-xl outline-none text-xs text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          if (target.value.trim()) {
+                            setCustomQuestions([
+                              ...customQuestions,
+                              { id: "q-" + Math.floor(Math.random() * 100000), questionText: target.value.trim(), type: 'text' }
+                            ]);
+                            target.value = "";
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById("new-question-input") as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          setCustomQuestions([
+                            ...customQuestions,
+                            { id: "q-" + Math.floor(Math.random() * 100000), questionText: input.value.trim(), type: 'text' }
+                          ]);
+                          input.value = "";
+                        }
+                      }}
+                      className="bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl px-4 text-xs font-semibold"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="pt-4 border-t border-indigo-500/10 flex justify-between">
@@ -505,6 +631,73 @@ export default function CreateEventFlow({ onEventCreated, onCancel, currentUser 
               ))}
             </div>
 
+            {/* Seletor de Capa Animada (GIFs Giphy) */}
+            <div className="pt-6 border-t border-indigo-500/10">
+              <div className="mb-4">
+                <span className="font-bold text-sm block flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-pink-400" /> Capa Animada (Simulador Giphy)
+                </span>
+                <span className="text-[11px] text-indigo-200/50 block">
+                  Pesquise e selecione um GIF animado premium para a capa do seu convite.
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Pesquise GIFs (ex: neon, disco, synthwave, rave...)"
+                    value={gifSearch}
+                    onChange={(e) => setGifSearch(e.target.value)}
+                    className="w-full bg-[#0a0f1d] border border-indigo-500/15 focus:border-indigo-400 px-4 py-3 rounded-2xl outline-none text-sm text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {GIPHY_MOCK_DATA.filter(gif => 
+                    !gifSearch.trim() || 
+                    gif.title.toLowerCase().includes(gifSearch.toLowerCase()) || 
+                    gif.tags.some(tag => tag.toLowerCase().includes(gifSearch.toLowerCase()))
+                  ).map((gif) => (
+                    <button
+                      key={gif.id}
+                      type="button"
+                      onClick={() => setCoverImage(gif.url)}
+                      className={`relative aspect-video rounded-xl overflow-hidden border transition-all duration-300 ${
+                        coverImage === gif.url 
+                          ? "border-pink-500 ring-2 ring-pink-500/50 scale-95" 
+                          : "border-indigo-500/10 hover:border-indigo-500/30"
+                      }`}
+                    >
+                      <img src={gif.url} alt={gif.title} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-slate-950/40 flex items-end p-1.5">
+                        <span className="text-[9px] text-white/90 font-medium truncate">{gif.title}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {coverImage && (
+                  <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-center justify-between animate-fadeIn">
+                    <div className="flex items-center gap-3">
+                      <img src={coverImage} alt="Cover preview" className="w-16 h-10 object-cover rounded-lg" />
+                      <div className="text-left">
+                        <span className="text-xs text-indigo-200 block font-semibold">Capa Animada Selecionada</span>
+                        <span className="text-[10px] text-indigo-400/70 truncate block max-w-xs">{coverImage}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCoverImage("")}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2.5 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl transition"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="pt-4 border-t border-indigo-500/10 flex justify-between">
               <button
                 onClick={() => setActiveStep("configs")}
@@ -536,6 +729,14 @@ export default function CreateEventFlow({ onEventCreated, onCancel, currentUser 
               <div className={`p-6 rounded-2xl ${currentTheme.background} ${currentTheme.fontClass} border shadow-2xl relative overflow-hidden transition-all duration-300`}>
                 <div className="absolute top-[-100px] left-[-50px] w-56 h-56 rounded-full bg-white/5 blur-3xl pointer-events-none" />
                 
+                {/* Cover Image Preview if selected */}
+                {coverImage && (
+                  <div className="w-full h-40 rounded-xl overflow-hidden mb-4 border border-white/10 relative">
+                    <img src={coverImage} alt="Event Cover" className="w-full h-full object-cover animate-fadeIn" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
+                  </div>
+                )}
+
                 {/* Simulated Header cover */}
                 <div className="border-b border-white/10 pb-4 mb-4">
                   <span className="text-[9px] font-mono tracking-widest text-[#f59e0b] block uppercase">SOLSTICE PORTAL PRESENTS</span>
